@@ -1,0 +1,42 @@
+#!/bin/sh
+
+
+uptime=$(uptime -p| cut -c 4-)
+user=$(whoami)
+hostname=$(uname -a|cut -d' ' -f2)
+kernel=$(uname -a|cut -d' ' -f2)
+battery=$(cat /sys/class/power_supply/BAT1/capacity)
+
+# cpuPercent=$(mpstat | grep -A 5 "%idle" | tail -n 1 | awk -F " " '{print 100 -  $ 12}'a)
+
+while IFS=':k '  read -r key val _; do
+    case $key in
+        MemTotal)
+            mem_used=$((mem_used + val))
+            mem_full=$val;;
+        Shmem) mem_used=$((mem_used + val));;
+        MemFree|Buffers|Cached|SReclaimable) mem_used=$((mem_used - val));;
+    esac
+done < /proc/meminfo
+memPercent="$(echo 100 ${mem_used} \* ${mem_full} / p | dc)"
+
+
+stats=$(column -t -s'\\' <<EOF
+<b>Memory</b>\\${memPercent}%
+<b>Battery</b>\\${battery}%
+<b>Uptime</b>\\${uptime}
+EOF
+)
+
+# get width of longest line in stats, minus formatting
+width=$(echo "${stats}"|sed 's|<[^>]*>||g'|wc -L)
+fortune=$(fortune -sn $width)
+line=$(printf '%0.s-' $(seq 1 $width))
+
+# append a line of '-' at the bottom of the body
+body="$stats\n$line\n$fortune"
+
+title="${user}@${hostname}"
+
+# echo "${title}\n${body}"
+notify-send "${title}" "${body}"
