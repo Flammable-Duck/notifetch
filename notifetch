@@ -1,11 +1,12 @@
 #!/bin/sh
 
-
-uptime=$(uptime -p| cut -c 4-)
+uptime=$(uptime -p | cut -c 4-)
 user=$(whoami)
-hostname=$(uname -a|cut -d' ' -f2)
-kernel=$(uname -a|cut -d' ' -f2)
+hostname=$(uname -a | cut -d' ' -f2)
+kernel=$(uname -a | cut -d' ' -f2)
 battery=$(cat /sys/class/power_supply/BAT1/capacity)
+bat_stat=$(cat /sys/class/power_supply/BAT1/status)
+date=$(date +'%a %b %d %l:%M %p')
 
 # cpuPercent=$(mpstat | grep -A 5 "%idle" | tail -n 1 | awk -F " " '{print 100 -  $ 12}'a)
 
@@ -23,17 +24,20 @@ memPercent="$(echo 100 ${mem_used} \* ${mem_full} / p | dc)"
 
 stats=$(column -t -s'\\' <<EOF
 <b>Memory</b>\\${memPercent}%
-<b>Battery</b>\\${battery}%
+<b>Battery</b>\\${battery}% ${bat_stat}
 <b>Uptime</b>\\${uptime}
+<b>Date</b>\\${date}
 EOF
 )
 
 # get width of longest line in stats, minus formatting
-width=$(echo "${stats}"|sed 's|<[^>]*>||g'|wc -L)
-fortune=$(fortune -sn $width)
+width=$(echo "${stats}" | sed 's|<[^>]*>||g' | wc -L)
+
+fortune=$(fortune -sn $(($width * 2)))
+# fortune=$(fortune -sn 100 void)
+
 line=$(printf '%0.s-' $(seq 1 $width))
 
-# append a line of '-' at the bottom of the body
 body="$stats\n$line\n$fortune"
 
 title="${user}@${hostname}"
