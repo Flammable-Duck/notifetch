@@ -8,6 +8,18 @@ battery=$(cat /sys/class/power_supply/BAT1/capacity)
 bat_stat=$(cat /sys/class/power_supply/BAT1/status)
 date=$(date +'%a %b %d %l:%M %p')
 
+player() {
+    player_status=$(playerctl --player=%any,firefox,chromium status 2> /dev/null)
+
+    if [ "$player_status" = "Playing" ]; then
+        echo " $(playerctl metadata --player=%any,firefox,chromium --format '{{artist}} - {{title}}')"
+    elif [ "$player_status" = "Paused" ]; then
+        echo " $(playerctl metadata --player=%any,firefox,chromium --format 'Paused | {{artist}} - {{title}}')"
+    else
+        echo ""
+    fi
+}
+
 # cpuPercent=$(mpstat | grep -A 5 "%idle" | tail -n 1 | awk -F " " '{print 100 -  $ 12}'a)
 
 while IFS=':k '  read -r key val _; do
@@ -33,14 +45,20 @@ EOF
 # get width of longest line in stats, minus formatting
 width=$(echo "${stats}" | sed 's|<[^>]*>||g' | wc -L)
 
+
 fortune=$(fortune -sn $(($width * 2)))
 # fortune=$(fortune -sn 100 void)
 
 line=$(printf '%0.s-' $(seq 1 $width))
 
-body="$stats\n$line\n$fortune"
 
 title="${user}@${hostname}"
+
+if [ "$(player)" = "" ]; then 
+    body="$stats\n$line\n$fortune"
+else
+    body="$stats\n$line\n$(player)"
+fi
 
 # echo "${title}\n${body}"
 notify-send "${title}" "${body}"
