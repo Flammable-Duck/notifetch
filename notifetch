@@ -1,12 +1,52 @@
 #!/bin/sh
 
-uptime=$(uptime -p | cut -c 4-)
-user=$(whoami)
-hostname=$(uname -a | cut -d' ' -f2)
-kernel=$(uname -a | cut -d' ' -f2)
-battery=$(cat /sys/class/power_supply/BAT1/capacity)
+#### CONFIG HERE ####
+# max width of text. Try to set this to the maximum width a single line 
+# of text can be in your notification. If you want this to be dynamically set 
+# based on the statistics width, set it to "dynamic"
+width=42
+# the message to show under the stats. Options are fortune, player, or smart
+# if anything else, that will be displayed instead
+message=smart
+
+## list of stats you wish the script to show.
+# options include memory, battery, uptime, date, os
+statslist="memory battery uptime date"
+
+##### END CONFIG ####
+
+uptime_stat=$(uptime -p | cut -c 4-)
+user_stat=$(whoami)
+hostname_stat=$(uname -a | cut -d' ' -f2)
+kernel_stat=$(uname -a | cut -d' ' -f2)
+bat_percent_stat=$(cat /sys/class/power_supply/BAT1/capacity)
 bat_stat=$(cat /sys/class/power_supply/BAT1/status)
-date=$(date +'%a %b %d %l:%M %p')
+date_stat=$(date +'%a %b %d %l:%M %p')
+
+title="${user_stat}@${hostname_stat}"
+
+while IFS=':k '  read -r key val _; do
+    case $key in
+        MemTotal)
+            mem_used=$((mem_used + val))
+            mem_full=$val;;
+        Shmem) mem_used=$((mem_used + val));;
+        MemFree|Buffers|Cached|SReclaimable) mem_used=$((mem_used - val));;
+    esac
+done < /proc/meminfo
+mempercent_stat="$(echo 100 ${mem_used} \* ${mem_full} / p | dc)"
+
+get_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        os=$PRETTY_NAME
+    elif command -v lsb_release; then
+        os=$(lsb_release -d| sed "s|Description:||;s| {2,}||g")
+    else
+        os=$(uname -s)
+    fi
+    echo $os
+}
 
 player() {
     player_status=$(playerctl --player=%any,firefox,chromium status 2> /dev/null)
@@ -20,45 +60,69 @@ player() {
     fi
 }
 
-# cpuPercent=$(mpstat | grep -A 5 "%idle" | tail -n 1 | awk -F " " '{print 100 -  $ 12}'a)
-
-while IFS=':k '  read -r key val _; do
-    case $key in
-        MemTotal)
-            mem_used=$((mem_used + val))
-            mem_full=$val;;
-        Shmem) mem_used=$((mem_used + val));;
-        MemFree|Buffers|Cached|SReclaimable) mem_used=$((mem_used - val));;
+getstat() {
+    case $1 in 
+        "memory")
+            echo "<b>Memory</b>~~${mempercent_stat}%"
+        ;;
+        "battery")
+            echo "<b>Battery</b>~~${bat_percent_stat}% ${bat_stat}"
+        ;;
+        "uptime")
+            echo "<b>Uptime</b>~~${uptime_stat}"
+        ;;
+        "date")
+            echo "<b>Date</b>~~${date_stat}"
+        ;;
+        "os")
+            echo "<b>OS</b>~~$(get_os)"
+        ;;
+        *)
+            echo "$1 not found."
+        ;;
     esac
-done < /proc/meminfo
-memPercent="$(echo 100 ${mem_used} \* ${mem_full} / p | dc)"
+}
 
+for stat in $statslist; do
+    stats="${stats}\n$(getstat $stat)"
+done
 
-stats=$(column -t -s'\\' <<EOF
-<b>Memory</b>\\${memPercent}%
-<b>Battery</b>\\${battery}% ${bat_stat}
-<b>Uptime</b>\\${uptime}
-<b>Date</b>\\${date}
-EOF
-)
+stats="$(echo ${stats} | column -t -s'~~')"
 
-# get width of longest line in stats, minus formatting
-width=$(echo "${stats}" | sed 's|<[^>]*>||g' | wc -L)
+if [ "${width}" = "dynamic" ]; then
+    # get width of longest line in stats, minus formatting
+    width=$(echo "${stats}" | sed 's|<[^>]*>||g' | wc -L)
+fi
 
-
-fortune=$(fortune -sn $(($width * 2)))
-# fortune=$(fortune -sn 100 void)
 
 line=$(printf '%0.s-' $(seq 1 $width))
 
+fortune=$(fortune -s | sed "
+s| {2}||g;  # remove instances of more than 2 spaces
+s|\t||g;    # remove tab characters
+s,(<|>),,g; # remove '<' and '>' because Awesomewm's notification
+            # formatting is dumb and having thoes chars breaks it
+")
 
-title="${user}@${hostname}"
 
-if [ "$(player)" = "" ]; then 
-    body="$stats\n$line\n$fortune"
-else
-    body="$stats\n$line\n$(player)"
-fi
+case $message in 
+    "fortune")
+        body="$stats\n$line\n$fortune"
+    ;;
+    "player")
+        body="$stats\n$line\n$(player)"
+    ;;
+    "smart")
+        if [ "$(player)" = "" ]; then 
+            body="$stats\n$line\n$fortune"
+        else
+            body="$stats\n$line\n$(player)"
+        fi
+    ;;
+    *)
+        body="$stats\n$line\n$message"
+    ;;
+esac
 
-# echo "${title}\n${body}"
+
 notify-send "${title}" "${body}"
