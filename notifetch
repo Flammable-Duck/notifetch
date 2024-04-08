@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#### CONFIG HERE ####
+#### START CONFIG ####
 # max width of text. Try to set this to the maximum width a single line 
 # of text can be in your notification. If you want this to be dynamically set 
 # based on the statistics width, set it to "dynamic"
@@ -10,7 +10,7 @@ width=42
 message=smart
 
 ## list of stats you wish the script to show.
-# options include: memory, battery, uptime, date, os
+# options include: memory, battery, uptime, remaining, date, os
 statslist="memory battery uptime date"
 
 ##### END CONFIG ####
@@ -21,6 +21,7 @@ hostname_stat=$(uname -a | cut -d' ' -f2)
 kernel_stat=$(uname -a | cut -d' ' -f2)
 bat_percent_stat=$(cat /sys/class/power_supply/BAT1/capacity)
 bat_stat=$(cat /sys/class/power_supply/BAT1/status)
+bat_remaining_stat=$(acpi | cut -d',' -f3| sed -e 's/^[[:space:]]*//; s/:[[:digit:]]+//2')
 date_stat=$(date +'%a %b %d %l:%M %p')
 
 title="${user_stat}@${hostname_stat}"
@@ -48,6 +49,15 @@ get_os() {
     echo $os
 }
 
+get_bat_remaining() {
+    bat_remaining_stat=$(
+        acpi |
+            cut -d',' -f3 |
+            sed -e 's/^[[:space:]]*//; s/:[[:digit:]]+//2'
+    )
+
+}
+
 player() {
     player_status=$(playerctl --player=%any,firefox,chromium status 2> /dev/null)
 
@@ -68,7 +78,7 @@ getstat() {
             echo "<b>Memory</b>~~${mempercent_stat}%"
         ;;
         "battery")
-            echo "<b>Battery</b>~~${bat_percent_stat}% ${bat_stat}"
+            echo "<b>Battery</b>~~${bat_percent_stat}%, ${bat_stat}, ${bat_remaining_stat}"
         ;;
         "uptime")
             echo "<b>Uptime</b>~~${uptime_stat}"
